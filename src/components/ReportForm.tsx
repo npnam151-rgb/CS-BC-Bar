@@ -55,7 +55,7 @@ export function ReportForm({ data, onChange }: ReportFormProps) {
               value={data.reporter}
               onChange={(e) => onChange({ ...data, reporter: e.target.value })}
               className="w-full px-4 py-3 md:py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
-              placeholder="VD: Nguyễn Văn A"
+              placeholder="Ví dụ: Nguyễn Văn A"
             />
           </div>
         </div>
@@ -75,7 +75,7 @@ export function ReportForm({ data, onChange }: ReportFormProps) {
                     <h3 className="font-semibold text-slate-800 text-base">
                       {def.title}
                     </h3>
-                    <p className="text-xs text-slate-500 mt-1 italic">
+                    <p className="text-xs text-slate-500 mt-1 italic whitespace-pre-wrap">
                       Ví dụ: {def.example}
                     </p>
                   </div>

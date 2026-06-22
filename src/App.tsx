@@ -40,7 +40,7 @@ export default function App() {
     const mappedLocation = locationMap[data.location] || data.location;
 
     const payload = {
-      sheetName: "BC Bar",
+      sheetName: "BC Bar 1",
       location: String(mappedLocation || ""),
       date: String(data.date || ""),
       reporter: String(data.reporter || ""),
