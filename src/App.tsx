@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { toPng } from 'html-to-image';
-import { Download, Camera, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Download, Camera, CheckCircle2, AlertCircle, Eye } from 'lucide-react';
 import { ReportForm } from './components/ReportForm';
 import { ReportPreview } from './components/ReportPreview';
+import { ImageModal } from './components/ImageModal';
 import { ReportData, CHECKLIST_ITEMS } from './types';
 
 // TODO: Thay thế đường dẫn này bằng URL Web App của Google Apps Script của bạn
@@ -22,6 +23,8 @@ export default function App() {
   const [isExporting, setIsExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
   const [sheetStatus, setSheetStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [modalImageUrl, setModalImageUrl] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
 
   const saveToGoogleSheets = async (data: ReportData) => {
@@ -35,7 +38,8 @@ export default function App() {
       "96 Hồng Tiến": "96HT",
       "98 Vũ Trọng Phụng": "98VTP",
       "01 Đặng Dung": "01 ĐD",
-      "3D Nguyễn Văn Huyên": "3D NVH"
+      "3D Nguyễn Văn Huyên": "3D NVH",
+      "12 Đào Tấn": "12ĐT"
     };
     const mappedLocation = locationMap[data.location] || data.location;
 
@@ -92,6 +96,8 @@ export default function App() {
     setExportSuccess(false);
     setSheetStatus('idle');
 
+    const fileName = `BaoCao_Bar_${reportData.location || 'CoSo'}_${reportData.date}.png`;
+
     try {
       // 1. Lưu dữ liệu lên Google Sheets
       await saveToGoogleSheets(reportData);
@@ -99,43 +105,59 @@ export default function App() {
       // Đợi một chút để UI cập nhật trạng thái
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // 2. Xuất ảnh
+      // 2. Xuất ảnh chất lượng cao
       const dataUrl = await toPng(previewRef.current, {
         quality: 1.0,
         pixelRatio: 2,
         backgroundColor: '#ffffff',
       });
 
-      const link = document.createElement('a');
-      const fileName = `BaoCao_Bar_${reportData.location || 'CoSo'}_${reportData.date}.png`;
-      link.download = fileName.replace(/\s+/g, '_');
-      link.href = dataUrl;
-      link.click();
+      setModalImageUrl(dataUrl);
+
+      // Kiểm tra xem trình duyệt đang dùng có phải thiết bị di động hay không
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+
+      let directDownloadWorked = false;
+      try {
+        const link = document.createElement('a');
+        link.download = fileName.replace(/\s+/g, '_');
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        directDownloadWorked = true;
+      } catch (dlErr) {
+        console.warn('Tải xuống trực tiếp bị trình duyệt hạn chế:', dlErr);
+      }
+
+      // Nếu trên di động hoặc trình duyệt chặn tải trực tiếp: Mở Popup Modal để chạm giữ lưu vào máy
+      if (isMobile || !directDownloadWorked) {
+        setIsModalOpen(true);
+      }
       
       setExportSuccess(true);
-      setTimeout(() => setExportSuccess(false), 5000);
+      setTimeout(() => setExportSuccess(false), 8000);
     } catch (err) {
       console.error('Failed to export image', err);
-      // Nếu lỗi do timeout của sheet, vẫn cố gắng xuất ảnh
+      // Nếu lỗi, vẫn cố gắng tạo ảnh và mở Popup Modal cho người dùng
       try {
         const dataUrl = await toPng(previewRef.current, {
           quality: 1.0,
           pixelRatio: 2,
           backgroundColor: '#ffffff',
         });
-        const link = document.createElement('a');
-        const fileName = `BaoCao_Bar_${reportData.location || 'CoSo'}_${reportData.date}.png`;
-        link.download = fileName.replace(/\s+/g, '_');
-        link.href = dataUrl;
-        link.click();
+        setModalImageUrl(dataUrl);
+        setIsModalOpen(true);
         setExportSuccess(true);
       } catch (innerErr) {
-        alert('Có lỗi xảy ra khi xuất ảnh. Vui lòng thử lại.');
+        alert('Có lỗi xảy ra khi tạo ảnh. Vui lòng thử lại.');
       }
     } finally {
       setIsExporting(false);
     }
   };
+
+  const currentFileName = `BaoCao_Bar_${reportData.location || 'CoSo'}_${reportData.date}.png`;
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
@@ -152,23 +174,35 @@ export default function App() {
               </h1>
             </div>
             
-            <button
-              onClick={handleExportImage}
-              disabled={isExporting}
-              className="hidden sm:inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {isExporting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  {sheetStatus === 'saving' ? 'Đang lưu dữ liệu...' : 'Đang xuất ảnh...'}
-                </>
-              ) : (
-                <>
-                  <Download className="w-4 h-4" />
-                  Tải ảnh báo cáo
-                </>
+            <div className="flex items-center gap-2">
+              {modalImageUrl && (
+                <button
+                  onClick={() => setIsModalOpen(true)}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-lg transition-colors border border-slate-200"
+                >
+                  <Eye className="w-4 h-4 text-indigo-600" />
+                  <span>Xem ảnh đã tạo</span>
+                </button>
               )}
-            </button>
+
+              <button
+                onClick={handleExportImage}
+                disabled={isExporting}
+                className="hidden sm:inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {isExporting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    {sheetStatus === 'saving' ? 'Đang lưu dữ liệu...' : 'Đang xuất ảnh...'}
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Tải ảnh báo cáo
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -176,13 +210,24 @@ export default function App() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-28 sm:pb-8">
         {exportSuccess && (
-          <div className={`mb-6 p-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 ${sheetStatus === 'error' ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'}`}>
-            {sheetStatus === 'error' ? <AlertCircle className="w-5 h-5 text-amber-600" /> : <CheckCircle2 className="w-5 h-5 text-emerald-600" />}
-            <p className="font-medium">
-              {sheetStatus === 'error' 
-                ? 'Đã tải ảnh thành công, nhưng LỖI lưu dữ liệu lên Google Sheets. Vui lòng kiểm tra mạng!' 
-                : 'Đã tải ảnh và lưu dữ liệu lên Google Sheets thành công!'}
-            </p>
+          <div className={`mb-6 p-4 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4 ${sheetStatus === 'error' ? 'bg-amber-50 border border-amber-200 text-amber-800' : 'bg-emerald-50 border border-emerald-200 text-emerald-800'}`}>
+            <div className="flex items-center gap-3">
+              {sheetStatus === 'error' ? <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" /> : <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />}
+              <p className="font-medium text-sm sm:text-base">
+                {sheetStatus === 'error' 
+                  ? 'Đã tạo ảnh thành công, nhưng LỖI lưu dữ liệu lên Google Sheets. Vui lòng kiểm tra mạng!' 
+                  : 'Đã tạo ảnh và lưu dữ liệu lên Google Sheets thành công!'}
+              </p>
+            </div>
+            {modalImageUrl && (
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-3.5 py-1.5 bg-white rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-800 shadow-xs transition-colors shrink-0"
+              >
+                <Eye className="w-4 h-4 text-indigo-600" />
+                Mở Popup xem & lưu ảnh
+              </button>
+            )}
           </div>
         )}
 
@@ -219,16 +264,25 @@ export default function App() {
       </main>
 
       {/* Mobile Bottom Action Bar */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-200 shadow-[0_-8px_15px_-3px_rgba(0,0,0,0.05)] z-50">
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 p-3 bg-white border-t border-slate-200 shadow-[0_-8px_15px_-3px_rgba(0,0,0,0.05)] z-40 flex items-center gap-2">
+        {modalImageUrl && (
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="flex-1 flex justify-center items-center gap-1.5 px-3 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-semibold rounded-xl border border-slate-300 transition-colors"
+          >
+            <Eye className="w-4 h-4 text-indigo-600" />
+            Xem lại ảnh
+          </button>
+        )}
         <button
           onClick={handleExportImage}
           disabled={isExporting}
-          className="w-full flex justify-center items-center gap-2 px-4 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white text-base font-semibold rounded-xl shadow-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+          className={`${modalImageUrl ? 'flex-2' : 'w-full'} flex justify-center items-center gap-2 px-4 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm sm:text-base font-semibold rounded-xl shadow-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed`}
         >
           {isExporting ? (
             <>
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              {sheetStatus === 'saving' ? 'Đang lưu dữ liệu...' : 'Đang xuất ảnh...'}
+              {sheetStatus === 'saving' ? 'Đang lưu...' : 'Đang tạo ảnh...'}
             </>
           ) : (
             <>
@@ -238,6 +292,14 @@ export default function App() {
           )}
         </button>
       </div>
+
+      {/* Modal Popup Preview & Save Image */}
+      <ImageModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        imageUrl={modalImageUrl}
+        fileName={currentFileName}
+      />
     </div>
   );
 }
