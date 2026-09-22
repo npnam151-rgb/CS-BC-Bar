@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Download, Share2, Info, Check } from 'lucide-react';
+import { X, Download, Copy, Info, Check } from 'lucide-react';
 
 interface ImageModalProps {
   isOpen: boolean;
@@ -20,34 +20,23 @@ export function ImageModal({ isOpen, onClose, imageUrl, fileName }: ImageModalPr
     link.click();
   };
 
-  const handleShare = async () => {
+  const handleCopyImage = async () => {
     try {
       const res = await fetch(imageUrl);
       const blob = await res.blob();
-      const file = new File([blob], fileName.replace(/\s+/g, '_'), { type: 'image/png' });
-
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: 'Báo cáo Bar',
-          text: 'Ảnh báo cáo Bar hàng ngày',
-        });
+      
+      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard && navigator.clipboard.write) {
+        const item = new ClipboardItem({ 'image/png': blob });
+        await navigator.clipboard.write([item]);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2500);
       } else {
-        handleDownload();
+        throw new Error('ClipboardItem API không được hỗ trợ');
       }
     } catch (err) {
-      console.log('Chia sẻ bị hủy hoặc không hỗ trợ', err);
-      handleDownload();
-    }
-  };
-
-  const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2500);
-    } catch (err) {
-      console.error(err);
+      console.warn('Không thể tự động sao chép qua Clipboard API:', err);
+      // Hướng dẫn nếu trình duyệt chặn tự động copy blob
+      alert('Trình duyệt chưa hỗ trợ tự động copy ảnh này. Bạn hãy chạm và giữ (long-press) vào ảnh bên dưới rồi chọn "Sao chép" (Copy) nhé!');
     }
   };
 
@@ -64,7 +53,7 @@ export function ImageModal({ isOpen, onClose, imageUrl, fileName }: ImageModalPr
               Ảnh Báo Cáo Hoàn Chỉnh
             </h3>
             <p className="text-xs sm:text-sm text-slate-500">
-              Chạm và giữ vào ảnh để lưu trực tiếp vào máy
+              Bấm copy hoặc chạm giữ vào ảnh để lưu/gửi
             </p>
           </div>
           <button
@@ -80,11 +69,11 @@ export function ImageModal({ isOpen, onClose, imageUrl, fileName }: ImageModalPr
         <div className="p-4 bg-amber-50/90 border-b border-amber-200 text-amber-900 text-xs sm:text-sm flex gap-3 items-start">
           <Info className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" />
           <div>
-            <span className="font-semibold block sm:inline">Cách lưu ảnh trên điện thoại: </span>
+            <span className="font-semibold block sm:inline">Mẹo gửi nhanh: </span>
             <span>
-              Chạm và giữ ngón tay (nhấn lâu) vào ảnh bên dưới trong 1-2 giây rồi chọn{' '}
-              <strong className="underline decoration-amber-600 font-bold">"Lưu vào Ảnh" (Save to Photos)</strong> hoặc{' '}
-              <strong className="underline decoration-amber-600 font-bold">"Tải hình ảnh xuống"</strong> để gửi qua Zalo.
+              Bấm nút <strong className="font-bold text-indigo-700">"Copy ảnh"</strong> để dán trực tiếp vào Zalo/Tin nhắn, hoặc chạm và giữ ngón tay vào ảnh bên dưới trong 1-2 giây rồi chọn{' '}
+              <strong className="underline decoration-amber-600 font-bold">"Sao chép" (Copy)</strong> /{' '}
+              <strong className="underline decoration-amber-600 font-bold">"Lưu vào Ảnh"</strong>.
             </span>
           </div>
         </div>
@@ -107,16 +96,27 @@ export function ImageModal({ isOpen, onClose, imageUrl, fileName }: ImageModalPr
         {/* Modal Footer Controls */}
         <div className="p-4 border-t border-slate-200 bg-white flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            {typeof navigator !== 'undefined' && 'canShare' in navigator && (
-              <button
-                type="button"
-                onClick={handleShare}
-                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl shadow-sm transition-colors"
-              >
-                <Share2 className="w-4 h-4" />
-                <span>Chia sẻ / Lưu ảnh</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleCopyImage}
+              className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-white text-sm font-medium rounded-xl shadow-sm transition-all ${
+                isCopied 
+                  ? 'bg-emerald-600 hover:bg-emerald-700' 
+                  : 'bg-indigo-600 hover:bg-indigo-700'
+              }`}
+            >
+              {isCopied ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-100" />
+                  <span>Đã copy ảnh!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" />
+                  <span>Copy ảnh</span>
+                </>
+              )}
+            </button>
 
             <button
               type="button"
@@ -124,7 +124,7 @@ export function ImageModal({ isOpen, onClose, imageUrl, fileName }: ImageModalPr
               className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-medium rounded-xl transition-colors border border-slate-300"
             >
               <Download className="w-4 h-4" />
-              <span>Tải lại ảnh</span>
+              <span>Tải ảnh</span>
             </button>
           </div>
 
